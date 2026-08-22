@@ -35,9 +35,7 @@ const menus = ref<MenuItem[]>([
     parentMenuName: '상점 관리',
     level: 2,
     parentId: '1',
-    route: defineAsyncComponent(
-      () => import('~/pages/admin/store/index.vue'),
-    ),
+    route: defineAsyncComponent(() => import('~/pages/admin/store/index.vue')),
     screenId: '2',
     screenName: '가게 목록',
   },

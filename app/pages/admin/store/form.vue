@@ -517,8 +517,8 @@ definePageMeta({ layout: 'admin' })
                 <HeadlessComboboxOption
                   v-for="{ cat, depth } in flattenedCategoryOptions"
                   :key="cat.id"
-                  :value="cat.id"
                   v-slot="{ active, selected }"
+                  :value="cat.id"
                 >
                   <div
                     class="flex items-center gap-2 py-2 pr-4 text-sm cursor-pointer select-none"
