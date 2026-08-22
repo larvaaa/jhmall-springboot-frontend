@@ -54,7 +54,9 @@ const props = defineProps<{
 }>()
 
 const emits = defineEmits<{
-  (e: 'closeTab', value: string): void
+  // vue3.3+ 부터 추가된 간결한 문법, typescript에서 named tuple 문법
+  // tuple: 길이와 각 요소의 타입이 고정된 배열
+  closeTab: [value: string]
 }>()
 
 // 전화번호 분리 입력
@@ -338,8 +340,8 @@ definePageMeta({ layout: 'admin' })
 <template>
   <BoItemScreenHeader
     v-if="props.screenName"
-    :show-register="true"
-    @register="onRegister"
+    :show-save="true"
+    @save="onRegister"
     >{{ props.screenName }}</BoItemScreenHeader
   >
   <form class="flex flex-col gap-4">

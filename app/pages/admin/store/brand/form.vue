@@ -90,7 +90,7 @@ definePageMeta({ layout: 'admin' })
 </script>
 
 <template>
-  <BoItemScreenHeader v-if="props.screenName" :show-register="false">{{
+  <BoItemScreenHeader v-if="props.screenName" :show-save="false">{{
     props.screenName
   }}</BoItemScreenHeader>
 
