@@ -30,17 +30,20 @@ const isOpen = computed({
         class="fixed inset-0 z-50 flex w-screen items-center justify-center p-4"
       >
         <DialogPanel class="w-[80vw] h-[80vh] rounded bg-white relative p-5">
+          <button class="absolute top-5 right-5" @click="isOpen = false">
+            <Icon name="mdi:close" class="w-6 h-6 text-black/60" />
+          </button>
           <DialogTitle as="h1"><slot name="title"></slot></DialogTitle>
 
           <slot></slot>
 
-          <AwesomeButton
+          <!-- <AwesomeButton
             class="w-[100px] absolute right-5 bottom-5"
             size="sm"
             type="opposite"
             @click="isOpen = false"
             >닫기</AwesomeButton
-          >
+          > -->
         </DialogPanel>
       </div>
     </div>

@@ -28,6 +28,52 @@ const changeTab = (index: number) => {
 }
 
 const menus = ref<MenuItem[]>([
+  { menuId: '1', menuName: '상점 관리', parentMenuName: '', level: 1 },
+  {
+    menuId: '2',
+    menuName: '가게 목록',
+    parentMenuName: '상점 관리',
+    level: 2,
+    parentId: '1',
+    route: defineAsyncComponent(() => import('~/pages/admin/store/index.vue')),
+    screenId: '2',
+    screenName: '가게 목록',
+  },
+  {
+    menuId: '3',
+    menuName: '가게 등록',
+    parentMenuName: '상점 관리',
+    level: 2,
+    parentId: '1',
+    route: defineAsyncComponent(() => import('~/pages/admin/store/form.vue')),
+    screenId: '3',
+    screenName: '가게 등록',
+  },
+  { menuId: '10', menuName: '브랜드 관리', parentMenuName: '', level: 1 },
+  {
+    menuId: '11',
+    menuName: '브랜드 목록',
+    parentMenuName: '브랜드 관리',
+    level: 2,
+    parentId: '10',
+    route: defineAsyncComponent(
+      () => import('~/pages/admin/store/brand/index.vue'),
+    ),
+    screenId: '11',
+    screenName: '브랜드 목록',
+  },
+  {
+    menuId: '12',
+    menuName: '브랜드 등록',
+    parentMenuName: '브랜드 관리',
+    level: 2,
+    parentId: '10',
+    route: defineAsyncComponent(
+      () => import('~/pages/admin/store/brand/form.vue'),
+    ),
+    screenId: '12',
+    screenName: '브랜드 등록',
+  },
   // { menuId: '3', menuName: '시스템 관리', level: 1 },
   // {
   //   menuId: '9',
@@ -151,7 +197,13 @@ const menus = ref<MenuItem[]>([
                   'ring-white/60 ring-offset-2 ring-offset-blue-400 focus:outline-none',
                 ]"
               >
-                <component :is="tab.route" />
+                <component
+                  :is="tab.route"
+                  :screen-id="tab.screenId"
+                  :screen-name="tab.screenName"
+                  :tab-index="tabs.indexOf(tab)"
+                  :params="tab.params"
+                />
               </TabPanel>
             </TabPanels>
           </TabGroup>

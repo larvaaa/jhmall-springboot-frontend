@@ -14,9 +14,9 @@ const props = defineProps<{
 }>()
 
 const emits = defineEmits<{
-  (e: 'setScreen', value: Brand): void
-  (e: 'openTab', value: Screen): void
-  (e: 'closeTab', value: string): void
+  setScreen: [value: Brand]
+  openTab: [value: Screen]
+  closeTab: [value: string]
 }>()
 
 const page = ref(0)
@@ -34,10 +34,13 @@ const fetchBrands = async () => {
   if (searchName.value.trim()) params.name = searchName.value.trim()
   if (searchIsUse.value !== '') params.isUse = searchIsUse.value
 
-  const res = await customFetch<BrandPage | Brand[]>('/store-service/brand', {
-    method: 'get',
-    params,
-  })
+  const res = await customFetch<ApiResponse<BrandPage>>(
+    '/store-service/brand',
+    {
+      method: 'get',
+      params,
+    },
+  )
   const data = res.data
   if (data && !Array.isArray(data) && 'content' in data) {
     brands.value = data.content
@@ -61,21 +64,6 @@ const onPageChange = async (p: number) => {
   page.value = p
   await fetchBrands()
 }
-
-const visiblePages = computed(() => {
-  const total = totalPages.value
-  if (total <= 7) return Array.from({ length: total }, (_, i) => i + 1)
-  const cur = currentPage.value + 1
-  const pages: (number | '...')[] = []
-  if (cur <= 4) {
-    pages.push(1, 2, 3, 4, 5, '...', total)
-  } else if (cur >= total - 3) {
-    pages.push(1, '...', total - 4, total - 3, total - 2, total - 1, total)
-  } else {
-    pages.push(1, '...', cur - 1, cur, cur + 1, '...', total)
-  }
-  return pages
-})
 
 const formatDate = (dateStr: string) => {
   if (!dateStr) return '-'
@@ -260,43 +248,10 @@ definePageMeta({ layout: 'admin' })
       </table>
     </div>
 
-    <!-- 페이지네이션 -->
-    <div
-      class="px-6 py-4 bg-[#f2f3ff]/50 flex items-center justify-center border-t border-[#c2c6d8]"
-    >
-      <div class="flex items-center gap-1">
-        <button
-          class="w-10 h-10 flex items-center justify-center border border-[#c2c6d8] rounded-lg hover:bg-[#e6e7f4] text-[#424656] transition-colors disabled:opacity-30"
-          :disabled="currentPage === 0"
-          @click="onPageChange(currentPage - 1)"
-        >
-          <Icon name="mdi:chevron-left" class="w-5 h-5" />
-        </button>
-        <template v-for="p in visiblePages" :key="p">
-          <span v-if="p === '...'" class="px-2 text-sm text-[#424656]"
-            >...</span
-          >
-          <button
-            v-else
-            class="w-10 h-10 rounded-lg text-xs font-semibold transition-colors"
-            :class="
-              currentPage === (p as number) - 1
-                ? 'bg-[#0050cb] text-white shadow-sm'
-                : 'hover:bg-[#e6e7f4] text-[#424656]'
-            "
-            @click="onPageChange((p as number) - 1)"
-          >
-            {{ p }}
-          </button>
-        </template>
-        <button
-          class="w-10 h-10 flex items-center justify-center border border-[#c2c6d8] rounded-lg hover:bg-[#e6e7f4] text-[#424656] transition-colors disabled:opacity-30"
-          :disabled="currentPage === totalPages - 1"
-          @click="onPageChange(currentPage + 1)"
-        >
-          <Icon name="mdi:chevron-right" class="w-5 h-5" />
-        </button>
-      </div>
-    </div>
+    <BoItemPagination
+      :current-page="currentPage"
+      :total-pages="totalPages"
+      @page-change="onPageChange"
+    />
   </div>
 </template>

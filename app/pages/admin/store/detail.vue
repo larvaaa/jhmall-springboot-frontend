@@ -8,6 +8,8 @@ import type {
 import TimeCellEditor from '~~/components/bo/item/TimeCellEditor.vue'
 import BrandList from '~/pages/admin/store/brand/popup.vue'
 import type { Brand } from '~~/types/admin/brand'
+import type { MenuListItem } from '~~/types/admin/menu'
+import type { StoreDetail } from '~~/types/admin/store'
 
 enum DayOfWeek {
   MON = 'MON',
@@ -48,14 +50,24 @@ const DayOfWeekLabel: Record<DayOfWeek, string> = {
   [DayOfWeek.SUN]: '일',
 }
 
+const DAY_ORDER = [
+  DayOfWeek.MON,
+  DayOfWeek.TUE,
+  DayOfWeek.WED,
+  DayOfWeek.THU,
+  DayOfWeek.FRI,
+  DayOfWeek.SAT,
+  DayOfWeek.SUN,
+]
+
 const props = defineProps<{
+  params?: Record<string, string>
+  tabIndex?: number
   screenId: string
-  screenName: string
+  screenName?: string
 }>()
 
 const emits = defineEmits<{
-  // vue3.3+ 부터 추가된 간결한 문법, typescript에서 named tuple 문법
-  // tuple: 길이와 각 요소의 타입이 고정된 배열
   closeTab: [value: string]
 }>()
 
@@ -66,6 +78,22 @@ const phone3Ref = ref<HTMLInputElement | null>(null)
 
 const onPhone2Input = () => {
   if (phoneInput.p2.length >= 4) phone3Ref.value?.focus()
+}
+
+function splitPhone(phone: string): { p1: string; p2: string; p3: string } {
+  const digits = phone.replace(/-/g, '')
+  if (digits.startsWith('02')) {
+    return {
+      p1: digits.slice(0, 2),
+      p2: digits.slice(2, digits.length - 4),
+      p3: digits.slice(-4),
+    }
+  }
+  return {
+    p1: digits.slice(0, 3),
+    p2: digits.slice(3, digits.length - 4),
+    p3: digits.slice(-4),
+  }
 }
 
 // 카테고리 목록
@@ -109,8 +137,76 @@ const form = reactive({
   brandId: '',
   estimatedDeliveryTime: '',
   minOrderPrice: '',
-  // storeOperationHour: [] as StoreOperationHour[],
 })
+
+const isBrandPopVisible = ref(false)
+const brand = ref<Brand | null>(null)
+
+// 영업시간 그리드에 미리 체크할 요일 (조회된 데이터가 있는 요일)
+const preSelectedDays = ref<Set<DayOfWeek>>(new Set())
+
+// 그리드에 표시될 데이터 (시간은 "hh:mm" 형식) - storeId가 있으면 조회 후 덮어씀
+const storeOperationHour = ref<StoreOperationHour[]>(
+  DAY_ORDER.map((day) => ({
+    dayOfWeek: day,
+    dayOfWeekLabel: DayOfWeekLabel[day],
+    openTime: '00:00',
+    closeTime: '00:00',
+    breakStart: '00:00',
+    breakEnd: '00:00',
+    isDayOff: false,
+  })),
+)
+
+// 가게 조회 후 form에 세팅
+if (props.params?.storeId) {
+  const { data: res } = await customUseFetch<ApiResponse<StoreDetail>>(
+    `/store-service/store/${props.params.storeId}`,
+  )
+  const detail = res.value?.data
+  if (detail) {
+    form.name = detail.name
+    form.postalCode = detail.postalCode
+    form.address = detail.address
+    form.detailAddress = detail.detailAddress
+    form.categoryIds = [...detail.categoryIds]
+    form.brandId = detail.brandId != null ? String(detail.brandId) : ''
+    form.estimatedDeliveryTime = String(detail.estimatedDeliveryTime)
+    form.minOrderPrice = String(detail.minOrderPrice)
+
+    const { p1, p2, p3 } = splitPhone(detail.phone)
+    phoneInput.p1 = p1
+    phoneInput.p2 = p2
+    phoneInput.p3 = p3
+
+    if (detail.brandId != null) {
+      brand.value = {
+        id: String(detail.brandId),
+        name: detail.brandName ?? '',
+        description: '',
+        logoUrl: null,
+        attachFile: null,
+        isUse: true,
+        createdAt: '',
+      }
+    }
+
+    const hourMap = new Map(detail.operationHours.map((h) => [h.dayOfWeek, h]))
+    storeOperationHour.value = DAY_ORDER.map((day) => {
+      const h = hourMap.get(day)
+      return {
+        dayOfWeek: day,
+        dayOfWeekLabel: DayOfWeekLabel[day],
+        openTime: h ? h.openTime.slice(0, 5) : '00:00',
+        closeTime: h ? h.closeTime.slice(0, 5) : '00:00',
+        breakStart: h ? h.breakStart.slice(0, 5) : '00:00',
+        breakEnd: h ? h.breakEnd.slice(0, 5) : '00:00',
+        isDayOff: h ? h.isDayOff : false,
+      }
+    })
+    preSelectedDays.value = new Set(hourMap.keys())
+  }
+}
 
 // 유효성 검사 에러
 const errors = reactive<Record<string, string>>({})
@@ -127,7 +223,6 @@ const validate = () => {
     { key: 'postalCode', label: '우편번호' },
     { key: 'address', label: '주소' },
     { key: 'detailAddress', label: '상세주소' },
-    // { key: 'brandId', label: '브랜드' },
     { key: 'estimatedDeliveryTime', label: '예상배달시간' },
     { key: 'minOrderPrice', label: '최소주문금액' },
   ]
@@ -140,12 +235,12 @@ const validate = () => {
   return Object.keys(errors).length === 0
 }
 
-const onRegister = async () => {
+const saveBasicInfo = async () => {
   if (!validate()) return
   const selectedBusinessHours = gridApi.value?.getSelectedRows() ?? []
   const phone = `${phoneInput.p1}${phoneInput.p2}${phoneInput.p3}`
-  await customFetch('/store-service/store', {
-    method: 'post',
+  await customFetch(`/store-service/store/${props.params?.storeId}`, {
+    method: 'patch',
     body: { ...form, phone, storeOperationHour: selectedBusinessHours },
   })
   showNotice.value = true
@@ -194,6 +289,13 @@ const gridApi = ref<GridApi | null>(null)
 
 const onGridReady = (params: GridReadyEvent) => {
   gridApi.value = params.api
+  if (preSelectedDays.value.size > 0) {
+    params.api.forEachNode((node) => {
+      if (node.data && preSelectedDays.value.has(node.data.dayOfWeek)) {
+        node.setSelected(true)
+      }
+    })
+  }
 }
 
 // 셀 수정 시 해당 로우 자동 체크
@@ -247,73 +349,6 @@ const defaultColDef = ref({
   flex: 1,
 })
 
-// 그리드에 표시될 데이터 (시간은 "hhmm" 형식)
-const storeOperationHour = ref<StoreOperationHour[]>([
-  {
-    dayOfWeek: DayOfWeek.MON,
-    dayOfWeekLabel: DayOfWeekLabel[DayOfWeek.MON],
-    openTime: '00:00',
-    closeTime: '00:00',
-    breakStart: '00:00',
-    breakEnd: '00:00',
-    isDayOff: false,
-  },
-  {
-    dayOfWeek: DayOfWeek.TUE,
-    dayOfWeekLabel: DayOfWeekLabel[DayOfWeek.TUE],
-    openTime: '00:00',
-    closeTime: '00:00',
-    breakStart: '00:00',
-    breakEnd: '00:00',
-    isDayOff: false,
-  },
-  {
-    dayOfWeek: DayOfWeek.WED,
-    dayOfWeekLabel: DayOfWeekLabel[DayOfWeek.WED],
-    openTime: '00:00',
-    closeTime: '00:00',
-    breakStart: '00:00',
-    breakEnd: '00:00',
-    isDayOff: false,
-  },
-  {
-    dayOfWeek: DayOfWeek.THU,
-    dayOfWeekLabel: DayOfWeekLabel[DayOfWeek.THU],
-    openTime: '00:00',
-    closeTime: '00:00',
-    breakStart: '00:00',
-    breakEnd: '00:00',
-    isDayOff: false,
-  },
-  {
-    dayOfWeek: DayOfWeek.FRI,
-    dayOfWeekLabel: DayOfWeekLabel[DayOfWeek.FRI],
-    openTime: '00:00',
-    closeTime: '00:00',
-    breakStart: '00:00',
-    breakEnd: '00:00',
-    isDayOff: false,
-  },
-  {
-    dayOfWeek: DayOfWeek.SAT,
-    dayOfWeekLabel: DayOfWeekLabel[DayOfWeek.SAT],
-    openTime: '00:00',
-    closeTime: '00:00',
-    breakStart: '00:00',
-    breakEnd: '00:00',
-    isDayOff: false,
-  },
-  {
-    dayOfWeek: DayOfWeek.SUN,
-    dayOfWeekLabel: DayOfWeekLabel[DayOfWeek.SUN],
-    openTime: '00:00',
-    closeTime: '00:00',
-    breakStart: '00:00',
-    breakEnd: '00:00',
-    isDayOff: false,
-  },
-])
-
 function openBrandSearchPopup() {
   isBrandPopVisible.value = true
 }
@@ -321,9 +356,6 @@ function openBrandSearchPopup() {
 function closeBrandSearchPopup() {
   isBrandPopVisible.value = false
 }
-
-const isBrandPopVisible = ref(false)
-const brand = ref<Brand | null>(null)
 
 function setBrand(b: Brand) {
   brand.value = b
@@ -335,16 +367,109 @@ function close() {
   emits('closeTab', props.screenId)
 }
 
+// 서브탭 (기본정보 / 메뉴관리)
+const activeSubTab = ref<'basic' | 'menu'>('basic')
+
+const menus = ref<MenuListItem[]>([])
+const menuSearchKeyword = ref('')
+const selectedMenuId = ref<number | null>(null)
+
+const fetchMenus = async () => {
+  if (!props.params?.storeId) return
+  const res = await customFetch<ApiResponse<MenuListItem[]>>(
+    '/store-service/menu',
+    {
+      method: 'get',
+      params: {
+        storeId: props.params.storeId,
+        searchKeyword: menuSearchKeyword.value.trim() || undefined,
+      },
+    },
+  )
+  menus.value = res.data ?? []
+}
+
+watch(activeSubTab, (tab) => {
+  if (tab === 'menu' && menus.value.length === 0) fetchMenus()
+})
+
+function selectMenuRow(id: number) {
+  selectedMenuId.value = id
+}
+
+function addNewMenu() {
+  selectedMenuId.value = null
+}
+
+function onMenuSaved() {
+  fetchMenus()
+}
+
+const showDeleteMenuConfirm = ref(false)
+const pendingDeleteMenu = ref<MenuListItem | null>(null)
+
+function deleteMenuRow(menu: MenuListItem) {
+  pendingDeleteMenu.value = menu
+  showDeleteMenuConfirm.value = true
+}
+
+async function confirmDeleteMenu() {
+  const menu = pendingDeleteMenu.value
+  if (!menu) return
+  await customFetch(`/store-service/menu/${menu.id}`, { method: 'delete' })
+  if (selectedMenuId.value === menu.id) selectedMenuId.value = null
+  pendingDeleteMenu.value = null
+  await fetchMenus()
+}
+
+const menuFormRef = ref<{ onSave: () => Promise<void> } | null>(null)
+
+async function onHeaderSave() {
+  if (activeSubTab.value === 'basic') {
+    await saveBasicInfo()
+  } else {
+    await menuFormRef.value?.onSave()
+  }
+}
+
 definePageMeta({ layout: 'admin' })
 </script>
 <template>
   <BoItemScreenHeader
     v-if="props.screenName"
     :show-save="true"
-    @save="onRegister"
+    @save="onHeaderSave"
     >{{ props.screenName }}</BoItemScreenHeader
   >
-  <form class="flex flex-col gap-4">
+  <!-- 서브탭 -->
+  <div class="flex items-center gap-1 border-b border-gray-200 mb-4">
+    <button
+      type="button"
+      class="px-4 h-10 text-sm font-semibold border-b-2 transition-colors"
+      :class="
+        activeSubTab === 'basic'
+          ? 'border-blue-600 text-blue-600'
+          : 'border-transparent text-gray-500 hover:text-gray-700'
+      "
+      @click="activeSubTab = 'basic'"
+    >
+      기본정보
+    </button>
+    <button
+      type="button"
+      class="px-4 h-10 text-sm font-semibold border-b-2 transition-colors"
+      :class="
+        activeSubTab === 'menu'
+          ? 'border-blue-600 text-blue-600'
+          : 'border-transparent text-gray-500 hover:text-gray-700'
+      "
+      @click="activeSubTab = 'menu'"
+    >
+      메뉴관리
+    </button>
+  </div>
+
+  <form v-show="activeSubTab === 'basic'" class="flex flex-col gap-4">
     <!-- grid 영역 start -->
     <div class="grid grid-cols-2 gap-5 border-stone-300 p-2 border">
       <div class="flex flex-col">
@@ -646,9 +771,115 @@ definePageMeta({ layout: 'admin' })
     <!-- 영업시간 테이블 영역 끝 -->
   </form>
 
+  <!-- 메뉴관리 -->
+  <div
+    v-show="activeSubTab === 'menu'"
+    class="grid grid-cols-[380px_1fr] gap-5"
+  >
+    <!-- 좌: 메뉴 목록 -->
+    <div
+      class="bg-white border border-gray-200 rounded-lg p-4 flex flex-col h-fit"
+    >
+      <div class="flex items-center gap-2 mb-3">
+        <input
+          v-model="menuSearchKeyword"
+          type="text"
+          class="flex-1 h-9 px-3 border border-gray-300 rounded text-sm focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+          placeholder="메뉴명 검색"
+          @keyup.enter="fetchMenus"
+        />
+        <BoItemSearchButton variant="secondary" size="sm" @click="fetchMenus"
+          >검색</BoItemSearchButton
+        >
+      </div>
+      <button
+        type="button"
+        class="flex items-center justify-center gap-1 h-9 mb-3 bg-blue-600 text-white text-xs font-semibold rounded hover:bg-blue-700 transition-colors"
+        @click="addNewMenu"
+      >
+        <Icon name="mdi:plus" class="w-4 h-4" />
+        신규 메뉴 등록
+      </button>
+      <div
+        class="border border-gray-200 rounded-md divide-y divide-gray-100 max-h-[60vh] overflow-y-auto"
+      >
+        <p
+          v-if="menus.length === 0"
+          class="text-xs text-gray-400 text-center py-6 px-2"
+        >
+          등록된 메뉴가 없습니다.
+        </p>
+        <div
+          v-for="menu in menus"
+          :key="menu.id"
+          class="flex items-center gap-3 px-3 py-2.5 cursor-pointer transition-colors"
+          :class="
+            selectedMenuId === menu.id
+              ? 'bg-blue-50 border-l-4 border-l-blue-600'
+              : 'hover:bg-gray-50 border-l-4 border-l-transparent'
+          "
+          @click="selectMenuRow(menu.id)"
+        >
+          <div
+            class="w-10 h-10 rounded bg-gray-100 flex items-center justify-center shrink-0 overflow-hidden"
+          >
+            <Icon
+              name="mdi:silverware-fork-knife"
+              class="w-4 h-4 text-gray-300"
+            />
+          </div>
+          <div class="flex-1 min-w-0">
+            <p class="text-sm font-medium text-gray-800 truncate">
+              {{ menu.name }}
+            </p>
+            <p class="text-[11px] text-gray-400">
+              {{ menu.price.toLocaleString() }}원
+            </p>
+          </div>
+          <span
+            v-if="menu.isSoldOut"
+            class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-red-50 text-red-600 shrink-0"
+            >품절</span
+          >
+          <span
+            v-if="!menu.isUse"
+            class="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-500 shrink-0"
+            >미사용</span
+          >
+          <button
+            type="button"
+            class="p-1 text-gray-300 hover:text-red-500 shrink-0"
+            title="삭제"
+            @click.stop="deleteMenuRow(menu)"
+          >
+            <Icon name="mdi:delete-outline" class="w-4 h-4" />
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 우: 메뉴 등록/수정 폼 -->
+    <BoStoreMenuForm
+      v-if="props.params?.storeId"
+      ref="menuFormRef"
+      :store-id="Number(props.params.storeId)"
+      :menu-id="selectedMenuId"
+      @saved="onMenuSaved"
+    />
+  </div>
+
+  <BoItemAlertConfirm
+    v-model="showDeleteMenuConfirm"
+    title="메뉴 삭제"
+    :message="`'${pendingDeleteMenu?.name}' 메뉴를 삭제하시겠습니까?`"
+    sub-message="옵션그룹/옵션도 함께 삭제됩니다."
+    confirm-text="삭제"
+    @confirm="confirmDeleteMenu"
+  />
+
   <BoItemAlertNotice
     v-model="showNotice"
-    message="등록이 완료되었습니다."
+    message="수정이 완료되었습니다."
     @confirm="close"
   />
 
