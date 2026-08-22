@@ -15,9 +15,12 @@ const props = defineProps<{
 const categories = ref<Category[]>([])
 
 const fetchCategories = async () => {
-  const res = await customFetch<Category[]>('/store-service/category', {
-    method: 'get',
-  })
+  const res = await customFetch<ApiResponse<Category[]>>(
+    '/store-service/category',
+    {
+      method: 'get',
+    },
+  )
   categories.value = res.data ?? []
 }
 
@@ -136,13 +139,23 @@ const onCancel = () => {
   Object.keys(errors).forEach((k) => delete errors[k])
 }
 
-const onDelete = async (cat: Category) => {
-  if (!confirm(`'${cat.name}' 카테고리를 삭제하시겠습니까?`)) return
+const showDeleteConfirm = ref(false)
+const pendingDeleteCategory = ref<Category | null>(null)
+
+const onDelete = (cat: Category) => {
+  pendingDeleteCategory.value = cat
+  showDeleteConfirm.value = true
+}
+
+const confirmDelete = async () => {
+  const cat = pendingDeleteCategory.value
+  if (!cat) return
   await customFetch(`/store-service/category/${cat.id}`, { method: 'delete' })
   if (selectedId.value === cat.id) {
     selectedId.value = null
     isEditing.value = false
   }
+  pendingDeleteCategory.value = null
   await fetchCategories()
 }
 
@@ -180,7 +193,7 @@ definePageMeta({ layout: 'admin' })
 </script>
 
 <template>
-  <BoItemScreenHeader v-if="props.screenName" @register="onAddNew">{{
+  <BoItemScreenHeader v-if="props.screenName" @save="onAddNew">{{
     props.screenName
   }}</BoItemScreenHeader>
 
@@ -461,4 +474,12 @@ definePageMeta({ layout: 'admin' })
       </div>
     </div>
   </div>
+
+  <BoItemAlertConfirm
+    v-model="showDeleteConfirm"
+    title="카테고리 삭제"
+    :message="`'${pendingDeleteCategory?.name}' 카테고리를 삭제하시겠습니까?`"
+    confirm-text="삭제"
+    @confirm="confirmDelete"
+  />
 </template>

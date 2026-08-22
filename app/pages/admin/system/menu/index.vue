@@ -23,6 +23,7 @@ const menus = ref<MenuItem[]>([])
 
 const selectedIndex = ref<number>(-1)
 const showNotice = ref(false)
+const noticeMessage = ref('저장이 완료되었습니다.')
 const form = ref<MenuItem>({
   menuName: '',
   parentMenuName: '',
@@ -36,40 +37,24 @@ const form = ref<MenuItem>({
 })
 
 async function saveMenu() {
-  const response = await customFetch('/admin-service/admin/system/menu', {
+  await customFetch('/admin-service/admin/system/menu', {
     method: 'post',
     body: form.value,
   })
 
-  // const response = await $fetch('/admin/system/menu', {
-  //   baseURL: 'http://localhost:8000',
-  //   method: 'post',
-  //   body: form.value,
-  //   headers: {
-  //     authorization: `Bearer ${useUserStore().authState.accessToken}`,
-  //   },
-  // })
-
+  noticeMessage.value = '저장이 완료되었습니다.'
   showNotice.value = true
   selectMenus()
 }
 
 async function deleteMenu() {
-  const response = await customFetch('/admin-service/admin/system/menu', {
+  await customFetch('/admin-service/admin/system/menu', {
     method: 'delete',
     body: form.value,
   })
 
-  // const response = await $fetch('/admin/system/menu', {
-  //   baseURL: 'http://localhost:8000',
-  //   method: 'delete',
-  //   body: form.value,
-  //   headers: {
-  //     authorization: `Bearer ${useUserStore().authState.accessToken}`,
-  //   },
-  // })
-
-  alert(response)
+  noticeMessage.value = '삭제가 완료되었습니다.'
+  showNotice.value = true
   selectMenus()
 }
 
@@ -300,6 +285,6 @@ function setScreen(item: Screen) {
         <ScreenList :is-popup="true" @set-screen="setScreen"></ScreenList>
       </template>
     </BoItemLayerPopup>
-    <BoItemAlertNotice v-model="showNotice" message="저장이 완료되었습니다." />
+    <BoItemAlertNotice v-model="showNotice" :message="noticeMessage" />
   </div>
 </template>
